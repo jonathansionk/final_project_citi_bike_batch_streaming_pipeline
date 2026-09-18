@@ -1,0 +1,13 @@
+pandas
+numpy
+python-dotenv
+google-cloud-storage
+gcsfs
+google-cloud-pubsub
+requests
+fastavro
+apache-beam[gcp]
+google-cloud-bigquery
+psycopg2-binary
+
+apache-airflow-providers-fab==3.8.0

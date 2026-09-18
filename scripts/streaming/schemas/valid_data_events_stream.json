@@ -1,0 +1,52 @@
+{
+  "fields": [
+    {
+      "name": "station_id",
+      "type": "STRING"
+    },
+    {
+      "name": "station_name",
+      "type": "STRING"
+    },
+    {
+      "name": "lat",
+      "type": "FLOAT"
+    },
+    {
+      "name": "lon",
+      "type": "FLOAT"
+    },
+    {
+      "name": "capacity",
+      "type": "INTEGER"
+    },
+    {
+      "name": "num_bikes_available",
+      "type": "INTEGER"
+    },
+    {
+      "name": "num_docks_available",
+      "type": "INTEGER"
+    },
+    {
+      "name": "num_ebikes_available",
+      "type": "INTEGER"
+    },
+    {
+      "name": "is_installed",
+      "type": "BOOLEAN"
+    },
+    {
+      "name": "is_renting",
+      "type": "BOOLEAN"
+    },
+    {
+      "name": "is_returning",
+      "type": "BOOLEAN"
+    },
+    {
+      "name": "event_timestamp",
+      "type": "TIMESTAMP"
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "type": "record",
+  "name": "CitibikeStationEvent",
+  "namespace": "com.citibike.streaming",
+  "fields": [
+    {
+      "name": "station_id",
+      "type": "string"
+    },
+    {
+      "name": "station_name",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "lat",
+      "type": ["null", "double"],
+      "default": null
+    },
+    {
+      "name": "lon",
+      "type": ["null", "double"],
+      "default": null
+    },
+    {
+      "name": "capacity",
+      "type": ["null", "int"],
+      "default": null
+    },
+    {
+      "name": "num_bikes_available",
+      "type": "int"
+    },
+    {
+      "name": "num_docks_available",
+      "type": "int"
+    },
+    {
+      "name": "num_ebikes_available",
+      "type": [
+        "null",
+        "int"
+      ],
+      "default": null
+    },
+    {
+      "name": "is_installed",
+      "type": "boolean"
+    },
+    {
+      "name": "is_renting",
+      "type": "boolean"
+    },
+    {
+      "name": "is_returning",
+      "type": "boolean"
+    },
+    {
+      "name": "event_timestamp",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      }
+    }
+  ]
+}

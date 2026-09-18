@@ -1,0 +1,241 @@
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: dockerfile.airflow
+
+  environment: &airflow-common-env
+
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET}
+
+    AIRFLOW__API__SECRET_KEY: ${AIRFLOW_API_SECRET_KEY}
+
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: >-
+      http://airflow_apiserver:8080/execution/
+
+    AIRFLOW__CORE__AUTH_MANAGER: >-
+      airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: >-
+      postgresql+psycopg2://${POSTGRES_AIRFLOW_USER}:${POSTGRES_AIRFLOW_PASSWORD}@postgres_airflow:5432/${POSTGRES_AIRFLOW_DB}
+
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+
+    # SMTP
+    AIRFLOW__SMTP__SMTP_HOST: ${AIRFLOW__SMTP__SMTP_HOST}
+    AIRFLOW__SMTP__SMTP_PORT: ${AIRFLOW__SMTP__SMTP_PORT}
+    AIRFLOW__SMTP__SMTP_STARTTLS: ${AIRFLOW__SMTP__SMTP_STARTTLS}
+    AIRFLOW__SMTP__SMTP_SSL: ${AIRFLOW__SMTP__SMTP_SSL}
+    AIRFLOW__SMTP__SMTP_MAIL_FROM: ${AIRFLOW__SMTP__SMTP_MAIL_FROM}
+
+    AIRFLOW__EMAIL__EMAIL_CONN_ID: smtp_default
+
+    AIRFLOW_CONN_SMTP_DEFAULT: >-
+      {"conn_type":"smtp","host":"smtp.gmail.com","login":"${AIRFLOW_SMTP_EMAIL}","password":"${AIRFLOW_SMTP_APP_PASSWORD}","port":587}
+
+    AIRFLOW_ADMIN_EMAIL: ${AIRFLOW_ADMIN_EMAIL}
+
+    # POSTGRES SOURCE
+    POSTGRES_SOURCE_HOST: postgres_source
+    POSTGRES_SOURCE_PORT: 5432
+    POSTGRES_SOURCE_DB: ${POSTGRES_SOURCE_DB}
+    POSTGRES_SOURCE_USER: ${POSTGRES_SOURCE_USER}
+    POSTGRES_SOURCE_PASSWORD: ${POSTGRES_SOURCE_PASSWORD}
+
+    # GCP ADC
+    GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp/application_default_credentials.json
+
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+    - ./airflow/plugins:/opt/airflow/plugins
+    - ./scripts:/opt/airflow/project/scripts
+    - ./sql:/opt/airflow/project/sql
+    - ./.env:/opt/airflow/project/.env
+
+    - ${APPDATA}/gcloud/application_default_credentials.json:/opt/airflow/gcp/application_default_credentials.json:ro
+
+services:
+
+  # =========================================
+  # POSTGRES SOURCE
+  # =========================================
+  postgres_source:
+    image: postgres:16
+    container_name: finpro_citibike_postgres
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_SOURCE_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_SOURCE_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_SOURCE_DB}
+
+    ports:
+      - "${POSTGRES_SOURCE_PORT}:5432"
+
+    volumes:
+      - postgres_source_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_SOURCE_USER} -d ${POSTGRES_SOURCE_DB}"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+    restart: unless-stopped
+
+
+  # =========================================
+  # POSTGRES AIRFLOW
+  # =========================================
+  postgres_airflow:
+    image: postgres:16
+    container_name: finpro_airflow_postgres
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_AIRFLOW_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_AIRFLOW_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_AIRFLOW_DB}
+
+    ports:
+      - "${POSTGRES_AIRFLOW_PORT}:5432"
+
+    volumes:
+      - postgres_airflow_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_AIRFLOW_USER} -d ${POSTGRES_AIRFLOW_DB}"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+    restart: unless-stopped
+
+
+  # =========================================
+  # AIRFLOW INIT
+  # =========================================
+  airflow_init:
+    <<: *airflow-common
+
+    container_name: finpro_airflow_init
+
+    depends_on:
+      postgres_airflow:
+        condition: service_healthy
+
+      postgres_source:
+        condition: service_healthy
+
+    environment:
+      <<: *airflow-common-env
+
+      AIRFLOW_ADMIN_USERNAME: ${AIRFLOW_ADMIN_USERNAME}
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
+      AIRFLOW_ADMIN_EMAIL: ${AIRFLOW_ADMIN_EMAIL}
+
+      AIRFLOW_ADMIN_FIRSTNAME: ${AIRFLOW_ADMIN_FIRSTNAME}
+      AIRFLOW_ADMIN_LASTNAME: ${AIRFLOW_ADMIN_LASTNAME}
+
+    command:
+      - bash
+      - -c
+      - |
+        airflow db migrate
+
+        airflow users create \
+          --username "$${AIRFLOW_ADMIN_USERNAME}" \
+          --password "$${AIRFLOW_ADMIN_PASSWORD}" \
+          --firstname "$${AIRFLOW_ADMIN_FIRSTNAME}" \
+          --lastname "$${AIRFLOW_ADMIN_LASTNAME}" \
+          --role Admin \
+          --email "$${AIRFLOW_ADMIN_EMAIL}" \
+        || true
+
+
+  # =========================================
+  # AIRFLOW API SERVER
+  # =========================================
+  airflow_apiserver:
+    <<: *airflow-common
+
+    container_name: finpro_airflow_apiserver
+
+    depends_on:
+      postgres_airflow:
+        condition: service_healthy
+
+      postgres_source:
+        condition: service_healthy
+
+      airflow_init:
+        condition: service_completed_successfully
+
+    ports:
+      - "8086:8080"
+
+    command: api-server
+
+    restart: unless-stopped
+
+
+  # =========================================
+  # AIRFLOW SCHEDULER
+  # =========================================
+  airflow_scheduler:
+    <<: *airflow-common
+
+    container_name: finpro_airflow_scheduler
+
+    depends_on:
+      postgres_airflow:
+        condition: service_healthy
+
+      postgres_source:
+        condition: service_healthy
+
+      airflow_init:
+        condition: service_completed_successfully
+
+    command: scheduler
+
+    restart: unless-stopped
+
+
+  # =========================================
+  # AIRFLOW DAG PROCESSOR
+  # =========================================
+  airflow_dag_processor:
+    <<: *airflow-common
+
+    container_name: finpro_airflow_dag_processor
+
+    depends_on:
+      postgres_airflow:
+        condition: service_healthy
+
+      postgres_source:
+        condition: service_healthy
+
+      airflow_init:
+        condition: service_completed_successfully
+
+    command: dag-processor
+
+    restart: unless-stopped
+
+
+# =========================================
+# VOLUMES
+# =========================================
+volumes:
+  postgres_source_data:
+  postgres_airflow_data:
