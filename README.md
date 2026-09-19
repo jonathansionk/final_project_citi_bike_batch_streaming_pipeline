@@ -176,44 +176,7 @@ Streaming menggunakan GBFS Citi Bike API:
 
 ## 7. Pipeline Architecture
 
-```mermaid
-flowchart TB
-
-    subgraph BATCH["Batch Pipeline"]
-        CSV["Historical Citi Bike CSV"]
-        PG["PostgreSQL Source"]
-        GCS["Google Cloud Storage"]
-        DF_BATCH["Dataflow Batch"]
-        CSV --> PG --> GCS --> DF_BATCH
-    end
-
-    subgraph STREAM["Streaming Pipeline"]
-        API["Citi Bike GBFS API"]
-        PRODUCER["Python Producer"]
-        PUBSUB["Google Pub/Sub"]
-        DF_STREAM["Dataflow Streaming"]
-        API --> PRODUCER --> PUBSUB --> DF_STREAM
-    end
-
-    subgraph BIGQUERY["BigQuery"]
-        STAGING["Staging Layer"]
-        SILVER["Silver Layer"]
-        GOLD["Gold Mart"]
-        STAGING --> SILVER --> GOLD
-    end
-
-    DF_BATCH --> STAGING
-    DF_STREAM --> STAGING
-
-    GOLD --> DASHBOARD["Looker Studio Dashboard"]
-
-    AIRFLOW["Apache Airflow"] -. Orchestration .-> PG
-    AIRFLOW -. Orchestration .-> GCS
-    AIRFLOW -. Orchestration .-> DF_BATCH
-    AIRFLOW -. Transformation .-> STAGING
-    AIRFLOW -. Transformation .-> SILVER
-    AIRFLOW -. Transformation .-> GOLD
-```
+![Pipeline Architecture](Screenshot-Hasil/pipeline-architecture.png)
 
 ---
 
@@ -259,7 +222,7 @@ DAG ini menggunakan:
 schedule=None
 ```
 
-karena dijalankan setelah batch ingestion berhasil.
+DAG ini dijalankan setelah batch ingestion berhasil.
 
 Flow utama:
 
@@ -362,35 +325,31 @@ final-project/
 │
 ├── airflow/
 │   └── dags/
-│       ├── citibike_batch_ingestion.py      --> DAG untuk mengecek source PostgreSQL, extract data batch dari PostgreSQL ke GCS, lalu trigger DAG transform
-│       ├── citibike_batch_transform.py      --> DAG untuk load data batch dari GCS ke BigQuery melalui Dataflow, lalu transform Staging → Silver → Gold
-│       └── streaming_ingestion.py           --> DAG untuk menjalankan pipeline streaming dan memastikan data streaming masuk ke BigQuery staging
+│       ├── citibike_batch_ingestion.py      --> DAG untuk mengecek source PostgreSQL
+│       ├── citibike_batch_transform.py      --> DAG untuk load data batch dari GCS ke BigQuery 
+│       └── streaming_ingestion.py           --> DAG untuk menjalankan pipeline streaming 
 │
 ├── scripts/
 │   ├── batch/
 │   │   ├── extract_postgres_to_gcs.py       --> Mengambil data trip dari PostgreSQL, membagi data per tanggal, lalu upload ke GCS
-│   │   └── load_batch_bq.py                 --> Menjalankan Apache Beam/Dataflow untuk membaca data batch dari GCS dan load ke BigQuery staging
+│   │   └── load_batch_bq.py                 --> Untuk load data dari GCS ke BigQuery staging
 │   │
 │   ├── postgres/
-│   │   └── load_raw_to_postgres.py          --> Membaca raw CSV Citi Bike dari local lalu memasukkannya ke tabel raw PostgreSQL
+│   │   └── load_raw_to_postgres.py          --> Untuk memasukkan raw data ke PostgreSQL
 │   │
 │   └── streaming/
-│       ├── producer.py                      --> Mengambil data Citi Bike API, membuat event Avro, lalu publish ke Pub/Sub; juga digunakan untuk inject invalid dan anomaly data
-│       ├── load_streaming_bq.py             --> Menjalankan Dataflow streaming dari Pub/Sub, melakukan validasi, lalu memisahkan data valid dan invalid ke BigQuery
+│       ├── producer.py                      --> Mengambil data Citi Bike API dan di publish ke Pub Sub
+│       ├── load_streaming_bq.py             --> Menngambil data dari Pub Sub ke BigQuery
 │       └── schemas/
 │           ├── station_status_event.avsc    --> Avro schema untuk struktur event station sebelum dikirim ke Pub/Sub
-│           ├── valid_data_events_stream.json
-│           │                                --> Schema untuk data streaming valid yang disimpan ke BigQuery
-│           └── invalid_data_events_stream.json
-│                                            --> Schema untuk data streaming invalid/rejected yang disimpan ke BigQuery
+│           ├── valid_data_events_stream.json --> Schema untuk data streaming valid yang disimpan ke BigQuery
+│           └── invalid_data_events_stream.json --> Schema untuk data streaming invalid/rejected yang disimpan ke BigQuery
 │
 ├── sql/
 │   ├── postgres/
 │   │   ├── ddl/
-│   │   │   ├── create_raw_citibike_trips.sql
-│   │   │   │                                --> Membuat tabel raw_citibike_trips di PostgreSQL
-│   │   │   └── create_index_raw_citibike.sql
-│   │   │                                    --> Membuat index pada raw table untuk mempercepat filter/query berdasarkan started_at
+│   │   │   ├── create_raw_citibike_trips.sql --> Membuat tabel raw_citibike_trips di PostgreSQL
+│   │   │   └── create_index_raw_citibike.sql --> Membuat index pada raw table untuk mempercepat filter/query berdasarkan started_at
 │   │   │
 │   │   ├── extract-gcs/
 │   │   │   ├── extract_raw_citibike.sql     --> Query untuk mengambil data trip dari PostgreSQL berdasarkan range tanggal
@@ -448,49 +407,7 @@ final-project/
 
 ---
 
-## 11. Environment Configuration
-
-File `.env` **tidak disimpan di GitHub** karena berisi konfigurasi dan credential.
-
-Setelah clone repository, buat file:
-
-```text
-.env
-```
-
-di root project, file .env berisi konfigurasi yang di perlukan seperti konfigurasi di GCP, Airflow, Postgre, dan lainnya.
-
-
-
-## 12. Dashboard
-
-Dashboard dibuat menggunakan Looker Studio.
-
-Main visual:
-
-- Total Trips
-- Bikes Available
-- Active Stations
-- Anomaly Alerts
-- Monthly Trip Trend
-- Member vs Casual
-- Top Stations by Activity
-- Latest / Anomaly Station Monitoring
-
-Contoh kolom pada tabel anomaly:
-
-```text
-Station Name
-Anomaly Status
-Previous Bikes
-Current Bikes
-Bike Drop
-Detected At
-```
-
----
-
-## 13. Conclusion
+## 11. Conclusion
 
 Project ini berhasil membangun pipeline data  **batch processing dan streaming processing** untuk Citi Bike.
 
